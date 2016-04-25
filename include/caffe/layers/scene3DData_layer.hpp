@@ -30,6 +30,7 @@ protected:
   virtual void shuffleCategory(int cate);
   virtual void shuffleData(Scene3D* scene, bool neg, bool pos);
   virtual void InternalThreadEntry();
+  void compute_attention_area(int scene_id, int obj_id, Dtype* attention_bb_data);
 
   vector<Scene3D*> scenes;
   vector<int> grid_size;
@@ -37,7 +38,6 @@ protected:
   vector<int> batch_size;
   vector< vector<ImgObjInd> > imgobj_pos_cates;
   vector<Box3Ddiff>  target_boxes;
-  vector<Box2D> bb2d_proj;
   string file_list;
   string data_root;
 
@@ -46,6 +46,7 @@ protected:
   int context_pad;
   int scale;
   int num_categories;
+  int scenes_id_;
 };
 }
 

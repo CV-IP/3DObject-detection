@@ -29,6 +29,7 @@ namespace caffe {
     float base[9];
     float center[3];
     float coeff[3];
+    unsigned int box2d[4];
   };
 
   struct Box2D{
@@ -53,6 +54,7 @@ namespace caffe {
 };
 
 Box3D processbox (Box3D box, float context_pad, int tsdf_size);
+int sum(std::vector<int> dim);
 
 enum Scene3DType { RGBD, Render, Mesh };
 
@@ -77,6 +79,9 @@ public:
 
   std::vector<ImgObjInd> imgobj_pos;
   std::vector<ImgObjInd> imgobj_neg;
+  unsigned int counter_pos;
+  unsigned int counter_neg;
+
 
   bool GPUdata;
   Scene3DType DataType;

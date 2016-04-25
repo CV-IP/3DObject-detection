@@ -1,10 +1,15 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-
+#include <numeric>
 #include "caffe/util/dss.hpp"
 
 namespace caffe {
+
+int sum(std::vector<int> dim)
+{
+  return accumulate(dim.begin(), dim.end(), 0);
+}
 
 Box3D processbox (Box3D box, float context_pad, int tsdf_size)
 {

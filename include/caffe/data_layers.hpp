@@ -105,8 +105,10 @@ class Scene3DBasePrefetchingDataLayer :
   virtual void InternalThreadEntry() {}
 
  protected:
+  Blob<Dtype> prefetch_attention_bb_;
   Blob<Dtype> prefetch_bb2d_proj_;
   Blob<Dtype> prefetch_bb3d_diff_;
+  Blob<Dtype> prefetch_bb3d_param_;
   bool output_bb3d_diff_;
 };
 
