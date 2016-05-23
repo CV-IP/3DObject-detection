@@ -44,20 +44,21 @@ namespace caffe {
   };
 
   struct mesh_meta{
-  // x : left right 
-  // y : height 
-  // z : depth
-    std::string mesh_file;
-  float base[9];// oreintation 
-  float center[3];
-  float coeff[3];
-};
+    // x : left right 
+    // y : height 
+    // z : depth
+      std::string mesh_file;
+    float base[9];// oreintation 
+    float center[3];
+    float coeff[3];
+  };
 
 Box3D processbox (Box3D box, float context_pad, int tsdf_size);
 int sum(std::vector<int> dim);
 
 enum Scene3DType { RGBD, Render, Mesh };
 
+template <typename Dtype> 
 class Scene3D{
 public:
   // defined in .list file
@@ -188,9 +189,12 @@ public:
   }
 };
 
-void compute_TSDF (std::vector<Scene3D*> *chosen_scenes_ptr, std::vector<int> *chosen_box_id, 
-                    float* datamem, std::vector<int> grid_size, int encode_type, float scale);
-void compute_TSDF_Space(Scene3D* scene , Box3D SpaceBox, float* tsdf_data_GPU, 
+template <typename Dtype>
+void compute_TSDF(std::vector<Scene3D<Dtype>*> *chosen_scenes_ptr, std::vector<int> *chosen_box_id, 
+                    Dtype* datamem, std::vector<int> grid_size, int encode_type, float scale);
+
+template <typename Dtype>
+void compute_TSDF_Space(Scene3D<Dtype>* scene , Box3D SpaceBox, Dtype* tsdf_data_GPU, 
                     std::vector<int> grid_size, int encode_type, float scale);
 
 }

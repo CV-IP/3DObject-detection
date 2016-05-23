@@ -45,10 +45,10 @@ void Pooling3DLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
              PoolingParameter_PoolMethod_AVE)
         << "Padding implemented only for average pooling.";
   }
-  channels_ = bottom[0]->channels();
-  length_ = bottom[0]->length();
-  height_ = bottom[0]->height();
-  width_ = bottom[0]->width();
+  channels_ = bottom[0]->shape(1);
+  length_ = bottom[0]->shape(2);
+  height_ = bottom[0]->shape(3);
+  width_ = bottom[0]->shape(4);
   pooled_height_ = static_cast<int>(ceil(static_cast<float>(
       height_ + 2 * pad_ - kernel_size_) / stride_)) + 1;
   pooled_width_ = static_cast<int>(ceil(static_cast<float>(
@@ -261,7 +261,7 @@ STUB_GPU(Pooling3DLayer);
 #endif
 
 INSTANTIATE_CLASS(Pooling3DLayer);
-//REGISTER_LAYER_CLASS(Pooling3D);
+REGISTER_LAYER_CLASS(Pooling3D);
 
 
 }  // namespace caffe

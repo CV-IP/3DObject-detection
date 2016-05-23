@@ -17,6 +17,7 @@ void ConcatLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void ConcatLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+  //LOG(INFO) << bottom[0]->shape_string();
   const int num_axes = bottom[0]->num_axes();
   const ConcatParameter& concat_param = this->layer_param_.concat_param();
   if (concat_param.has_concat_dim()) {

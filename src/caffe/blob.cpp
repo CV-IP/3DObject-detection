@@ -13,7 +13,7 @@ namespace caffe {
 template <typename Dtype>
 void Blob<Dtype>::Reshape(const int num, const int channels, const int length, const int height,
     const int width) {
-  CHECK_GE(num, 0);
+  /*CHECK_GE(num, 0);
   CHECK_GE(channels, 0);
   CHECK_GE(length, 0);
   CHECK_GE(height, 0);
@@ -26,16 +26,25 @@ void Blob<Dtype>::Reshape(const int num, const int channels, const int length, c
   } else {
     data_.reset(reinterpret_cast<SyncedMemory*>(NULL));
     diff_.reset(reinterpret_cast<SyncedMemory*>(NULL));
-  }
+  }*/
+  vector<int> shape(5);
+  shape[0] = num;
+  shape[1] = channels;
+  shape[2] = length;
+  shape[3] = height;
+  shape[4] = width;
+  Reshape(shape);
 }
 
 template <typename Dtype>
 void Blob<Dtype>::Reshape(const int num, const int channels, const int height,
     const int width) {
-  if (num ==0 && channels == 0 && height ==0 && width == 0)
-    Reshape(num, channels, 0, height, width);
-  else
-    Reshape(num, channels, 1, height, width);
+  vector<int> shape(4);
+  shape[0] = num;
+  shape[1] = channels;
+  shape[2] = height;
+  shape[3] = width;
+  Reshape(shape);
 }
 
 
@@ -82,10 +91,7 @@ Blob<Dtype>::Blob(const int num, const int channels, const int height,
     const int width)
   // capacity_ must be initialized before calling Reshape
   : capacity_(0) {
-  if (num ==0 && channels == 0 && height ==0 && width == 0)
-    Reshape(num, channels, 0, height, width);
-  else
-    Reshape(num, channels, 1, height, width);
+    Reshape(num, channels, height, width);
 }
 
 template <typename Dtype>
@@ -405,7 +411,7 @@ void Blob<Dtype>::scale_diff(Dtype scale_factor) {
 
 template <typename Dtype>
 bool Blob<Dtype>::ShapeEquals(const BlobProto& other) {
-  if (other.has_num() || other.has_channels() || other.has_length() ||
+  if (other.has_num() || other.has_channels() ||
       other.has_height() || other.has_width()) {
     // Using deprecated 4D Blob dimensions --
     // shape is (num, channels, height, width).
@@ -413,10 +419,9 @@ bool Blob<Dtype>::ShapeEquals(const BlobProto& other) {
     // methods as these index from the beginning of the blob shape, where legacy
     // parameter blobs were indexed from the end of the blob shape (e.g., bias
     // Blob shape (1 x 1 x 1 x N), IP layer weight Blob shape (1 x 1 x M x N)).
-    return shape_.size() <= 5 &&
-           LegacyShape(-5) == other.num() &&
-           LegacyShape(-4) == other.channels() &&
-           LegacyShape(-4) == other.length() &&
+    return shape_.size() <= 4 &&
+           LegacyShape(-4) == other.num() &&
+           LegacyShape(-3) == other.channels() &&
            LegacyShape(-2) == other.height() &&
            LegacyShape(-1) == other.width();
   }
@@ -464,24 +469,9 @@ template <typename Dtype>
 void Blob<Dtype>::FromProto(const BlobProto& proto, bool reshape) {
   if (reshape) {
     vector<int> shape;
-    if (proto.has_num() || proto.has_channels() ||
-        proto.has_height() || proto.has_width()) {
-      // Using deprecated 5D Blob dimensions --
-      // shape is (num, channels, height, width).
-      shape.resize(5);
-      shape[0] = proto.num();
-      shape[1] = proto.channels();
-      shape[2] = 1;
-      shape[3] = proto.height();
-      shape[4] = proto.width();
-
-      if (proto.has_length())
-        shape[2] = proto.length();
-    } else {
-      shape.resize(proto.shape().dim_size());
-      for (int i = 0; i < proto.shape().dim_size(); ++i) {
-        shape[i] = proto.shape().dim(i);
-      }
+    shape.resize(proto.shape().dim_size());
+    for (int i = 0; i < proto.shape().dim_size(); ++i) {
+      shape[i] = proto.shape().dim(i);
     }
     Reshape(shape);
   } else {
@@ -544,7 +534,7 @@ void Blob<Dtype>::FromMat(const char *fname) {
   {
     CHECK_EQ(matvar->class_type, matio_class_map<Dtype>())
       << "Field 'data' must be of the right class (single/double) in MAT file " << fname;
-    CHECK(matvar->rank < 5) << "Field 'data' cannot have ndims > 4 in MAT file " << fname;
+    CHECK(matvar->rank < 5) << "Field 'data' cannot have ndims > 5 in MAT file " << fname;
     Reshape((matvar->rank > 3) ? matvar->dims[3] : 1,
       (matvar->rank > 2) ? matvar->dims[2] : 1,
       (matvar->rank > 1) ? matvar->dims[1] : 1,
@@ -575,11 +565,25 @@ void Blob<Dtype>::ToMat(const char *fname, bool write_diff) {
   CHECK(matfp) << "Error creating MAT file " << fname;
   size_t dims[4];
   dims[0] = width(); dims[1] = height(); dims[2] = channels(); dims[3] = num();
+  size_t dims1[5];
+  if (num_axes() == 5)
+  {
+    dims1[0] = shape(4); dims1[1] = shape(3); dims1[2] = shape(2); dims1[3] = shape(1);
+    dims1[4] = shape(0);
+  }
   matvar_t *matvar;
   // save data
   {
-    matvar = Mat_VarCreate("data", matio_class_map<Dtype>(), matio_type_map<Dtype>(),
-         4, dims, mutable_cpu_data(), 0);
+    if (num_axes() == 5)
+    {
+      matvar = Mat_VarCreate("data", matio_class_map<Dtype>(), matio_type_map<Dtype>(),
+           5, dims1, mutable_cpu_data(), 0);
+    }
+    else
+    {
+      matvar = Mat_VarCreate("data", matio_class_map<Dtype>(), matio_type_map<Dtype>(),
+           4, dims, mutable_cpu_data(), 0);
+    }
     CHECK(matvar) << "Error creating 'data' variable";
     CHECK_EQ(Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE), 0) 
       << "Error saving array 'data' into MAT file " << fname;
@@ -587,8 +591,16 @@ void Blob<Dtype>::ToMat(const char *fname, bool write_diff) {
   }
   // save diff
   if (write_diff) {
-    matvar = Mat_VarCreate("diff", matio_class_map<Dtype>(), matio_type_map<Dtype>(),
-         4, dims, mutable_cpu_diff(), 0);
+    if (num_axes() == 5)
+    {
+      matvar = Mat_VarCreate("diff", matio_class_map<Dtype>(), matio_type_map<Dtype>(),
+           5, dims1, mutable_cpu_diff(), 0);
+    }
+    else
+    {
+      matvar = Mat_VarCreate("diff", matio_class_map<Dtype>(), matio_type_map<Dtype>(),
+           4, dims, mutable_cpu_diff(), 0);
+    }
     CHECK(matvar) << "Error creating 'diff' variable";
     CHECK_EQ(Mat_VarWrite(matfp, matvar, MAT_COMPRESSION_NONE), 0)
       << "Error saving array 'diff' into MAT file " << fname;

@@ -38,6 +38,10 @@ class Convolution3DLayer : public Layer<Dtype> {
  public:
   explicit Convolution3DLayer(const LayerParameter& param)
       : Layer<Dtype>(param) {}
+  virtual inline int MinBottomBlobs() const { return 1; }
+  virtual inline int MinTopBlobs() const { return 1; }
+  virtual inline bool EqualNumBottomTopBlobs() const { return true; }
+  virtual inline const char* type() const { return "Convolution3D"; }
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,

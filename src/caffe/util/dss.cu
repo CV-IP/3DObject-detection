@@ -3,209 +3,212 @@
 
 namespace caffe {
 
-__global__ void compute_TSDFGPUbox(float* tsdf_data, float* R_data, float* K_data,  float* range, 
+template <typename Dtype>
+__global__ void compute_TSDFGPUbox(int nthreads, Dtype* tsdf_data, float* R_data, float* K_data,  float* range, 
 	float grid_delta,  unsigned int *grid_range, RGBDpixel* RGBDimage,  
 	unsigned int* star_end_indx_data ,unsigned int*  pc_lin_indx_data, 
 	float* XYZimage,  const float* bb3d_data, int tsdf_size,int tsdf_size1,
 	int tsdf_size2, int fdim, int im_w, int im_h, const int encode_type,const float scale)
 {
-    const int index = threadIdx.x + blockIdx.x * blockDim.x;
-    int volume_size = tsdf_size * tsdf_size1 * tsdf_size2;
-    if (index > volume_size) return;
-    float delta_x = 2 * bb3d_data[12] / float(tsdf_size);  
-    float delta_y = 2 * bb3d_data[13] / float(tsdf_size1);  
-    float delta_z = 2 * bb3d_data[14] / float(tsdf_size2);  
-    float surface_thick = 0.1;
-    const float MaxDis = surface_thick + 20;
-    //printf("delta_x:%f,%f,%f\n",R_data[0],R_data[1],R_data[2]); 
-    // caculate tsdf for this box
-    /*
-    float x = float(index % tsdf_size);
-    float y = float((index / tsdf_size) % tsdf_size);   
-    float z = float((index / tsdf_size / tsdf_size) % tsdf_size);
-    */
-    float x = float((index / (tsdf_size1*tsdf_size2))%tsdf_size) ;
-    float y = float((index / tsdf_size2) % tsdf_size1);
-    float z = float(index % tsdf_size2);
+    //const int index = threadIdx.x + blockIdx.x * blockDim.x;
+    CUDA_KERNEL_LOOP(index, nthreads) {
+      int volume_size = tsdf_size * tsdf_size1 * tsdf_size2;
+      if (index > volume_size) return;
+      float delta_x = 2 * bb3d_data[12] / float(tsdf_size);  
+      float delta_y = 2 * bb3d_data[13] / float(tsdf_size1);  
+      float delta_z = 2 * bb3d_data[14] / float(tsdf_size2);  
+      float surface_thick = 0.1;
+      const float MaxDis = surface_thick + 20;
+      //printf("delta_x:%f,%f,%f\n",R_data[0],R_data[1],R_data[2]); 
+      // caculate tsdf for this box
+      /*
+      float x = float(index % tsdf_size);
+      float y = float((index / tsdf_size) % tsdf_size);   
+      float z = float((index / tsdf_size / tsdf_size) % tsdf_size);
+      */
+      float x = float((index / (tsdf_size1*tsdf_size2))%tsdf_size) ;
+      float y = float((index / tsdf_size2) % tsdf_size1);
+      float z = float(index % tsdf_size2);
 
-    for (int i = 0; i < fdim; i++){
-        tsdf_data[index + i * volume_size] = 0;
-    }
+      for (int i = 0; i < fdim; i++){
+          tsdf_data[index + i * volume_size] = 0;
+      }
 
-    // get grid world coordinate
-    float temp_x = - bb3d_data[12] + (x + 0.5) * delta_x;
-    float temp_y = - bb3d_data[13] + (y + 0.5) * delta_y;
-    float temp_z = - bb3d_data[14] + (z + 0.5) * delta_z;
+      // get grid world coordinate
+      float temp_x = - bb3d_data[12] + (x + 0.5) * delta_x;
+      float temp_y = - bb3d_data[13] + (y + 0.5) * delta_y;
+      float temp_z = - bb3d_data[14] + (z + 0.5) * delta_z;
 
-    x = temp_x * bb3d_data[0] + temp_y * bb3d_data[3] + temp_z * bb3d_data[6]
-        + bb3d_data[9];
-    y = temp_x * bb3d_data[1] + temp_y * bb3d_data[4] + temp_z * bb3d_data[7]
-        + bb3d_data[10];
-    z = temp_x * bb3d_data[2] + temp_y * bb3d_data[5] + temp_z * bb3d_data[8]
-        + bb3d_data[11]; 
+      x = temp_x * bb3d_data[0] + temp_y * bb3d_data[3] + temp_z * bb3d_data[6]
+          + bb3d_data[9];
+      y = temp_x * bb3d_data[1] + temp_y * bb3d_data[4] + temp_z * bb3d_data[7]
+          + bb3d_data[10];
+      z = temp_x * bb3d_data[2] + temp_y * bb3d_data[5] + temp_z * bb3d_data[8]
+          + bb3d_data[11]; 
 
-    // project to image plane decides the sign
-    // rotate back and swap y, z and -y
-    float xx =   R_data[0] * x + R_data[3] * y + R_data[6] * z;
-    float zz =   R_data[1] * x + R_data[4] * y + R_data[7] * z;
-    float yy = - R_data[2] * x - R_data[5] * y - R_data[8] * z;
-    int ix = floor(xx * K_data[0] / zz + K_data[2]+0.5) - 1;
-    int iy = floor(yy * K_data[4] / zz + K_data[5]+0.5) - 1;
+      // project to image plane decides the sign
+      // rotate back and swap y, z and -y
+      float xx =   R_data[0] * x + R_data[3] * y + R_data[6] * z;
+      float zz =   R_data[1] * x + R_data[4] * y + R_data[7] * z;
+      float yy = - R_data[2] * x - R_data[5] * y - R_data[8] * z;
+      int ix = floor(xx * K_data[0] / zz + K_data[2]+0.5) - 1;
+      int iy = floor(yy * K_data[4] / zz + K_data[5]+0.5) - 1;
 
-    
-    if (ix < 0 || ix >= im_w || iy < 0 || iy >= im_h || zz < 0.0001){
-        return;
-    } 
+      
+      if (ix < 0 || ix >= im_w || iy < 0 || iy >= im_h || zz < 0.0001){
+          return;
+      } 
 
-    // find the most nearby point 
-    float disTosurfaceMin = MaxDis;
-    int idx_min = 0;
-    int x_grid = floor((x-range[0])/grid_delta);
-    int y_grid = floor((y-range[1])/grid_delta);
-    int z_grid = floor((z-range[2])/grid_delta);
-    //grid_range =  [w,d,h];  linearInd =x(i)*d*h+y(i)*h+z(i);
-    //if (x_grid < 0 || x_grid >= grid_range[0] || y_grid < 0 || y_grid >= grid_range[1] || z_grid < 0 || z_grid >= grid_range[2]){
-    if (x_grid < 0 || x_grid > grid_range[0] || y_grid < 0 || y_grid > grid_range[1] || z_grid < 0 || z_grid > grid_range[2]){
-        return;
-    }
-    int linearInd =x_grid*grid_range[1]*grid_range[2]+y_grid*grid_range[2]+z_grid;      
-    int search_region =1;
-    if (star_end_indx_data[2*linearInd+0]>0){
-        search_region =0;
-    }  
-    int find_close_point = -1;
+      // find the most nearby point 
+      float disTosurfaceMin = MaxDis;
+      int idx_min = 0;
+      int x_grid = floor((x-range[0])/grid_delta);
+      int y_grid = floor((y-range[1])/grid_delta);
+      int z_grid = floor((z-range[2])/grid_delta);
+      //grid_range =  [w,d,h];  linearInd =x(i)*d*h+y(i)*h+z(i);
+      //if (x_grid < 0 || x_grid >= grid_range[0] || y_grid < 0 || y_grid >= grid_range[1] || z_grid < 0 || z_grid >= grid_range[2]){
+      if (x_grid < 0 || x_grid > grid_range[0] || y_grid < 0 || y_grid > grid_range[1] || z_grid < 0 || z_grid > grid_range[2]){
+          return;
+      }
+      int linearInd =x_grid*grid_range[1]*grid_range[2]+y_grid*grid_range[2]+z_grid;      
+      int search_region =1;
+      if (star_end_indx_data[2*linearInd+0]>0){
+          search_region =0;
+      }  
+      int find_close_point = -1;
 
-    while(find_close_point<0&&search_region<3){
-      for (int iix = max(0,x_grid-search_region); iix < min((int)grid_range[0],x_grid+search_region+1); iix++){
-        for (int iiy = max(0,y_grid-search_region); iiy < min((int)grid_range[1],y_grid+search_region+1); iiy++){
-          for (int iiz = max(0,z_grid-search_region); iiz < min((int)grid_range[2],z_grid+search_region+1); iiz++){
-              unsigned int iilinearInd = iix*grid_range[1]*grid_range[2] + iiy*grid_range[2] + iiz;
+      while(find_close_point<0&&search_region<3){
+        for (int iix = max(0,x_grid-search_region); iix < min((int)grid_range[0],x_grid+search_region+1); iix++){
+          for (int iiy = max(0,y_grid-search_region); iiy < min((int)grid_range[1],y_grid+search_region+1); iiy++){
+            for (int iiz = max(0,z_grid-search_region); iiz < min((int)grid_range[2],z_grid+search_region+1); iiz++){
+                unsigned int iilinearInd = iix*grid_range[1]*grid_range[2] + iiy*grid_range[2] + iiz;
 
-              for (int pid = star_end_indx_data[2*iilinearInd+0]-1; pid < star_end_indx_data[2*iilinearInd+1]-1;pid++){
-                 
-                 //printf("%d-%d\n",star_end_indx_data[2*iilinearInd+0],star_end_indx_data[2*iilinearInd+1]);
-                 unsigned int p_idx_lin = pc_lin_indx_data[pid];
-                 float xp = XYZimage[3*p_idx_lin+0];
-                 float yp = XYZimage[3*p_idx_lin+1];
-                 float zp = XYZimage[3*p_idx_lin+2];
-                 // distance
-                 float xd = abs(x - xp);
-                 float yd = abs(y - yp);
-                 float zd = abs(z - zp);
-                 if (xd < 2.0 * delta_x||yd < 2.0 * delta_x|| zd < 2.0 * delta_x){
-                    float disTosurface = sqrt(xd * xd + yd * yd + zd * zd);
-                    if (disTosurface < disTosurfaceMin){
-                       disTosurfaceMin = disTosurface;
-                       idx_min = p_idx_lin;
-                       find_close_point = 1;
-                       //printf("x:%f,%f,%f,xp,%f,%f,%f,xd%f,%f,%f,%f\n",x,y,z,xp,yp,zp,xd,yd,zd,disTosurfaceMin);
-                       
-                    }
-                }
-              } // for all points in this grid
-            
+                for (int pid = star_end_indx_data[2*iilinearInd+0]-1; pid < star_end_indx_data[2*iilinearInd+1]-1;pid++){
+                   
+                   //printf("%d-%d\n",star_end_indx_data[2*iilinearInd+0],star_end_indx_data[2*iilinearInd+1]);
+                   unsigned int p_idx_lin = pc_lin_indx_data[pid];
+                   float xp = XYZimage[3*p_idx_lin+0];
+                   float yp = XYZimage[3*p_idx_lin+1];
+                   float zp = XYZimage[3*p_idx_lin+2];
+                   // distance
+                   float xd = abs(x - xp);
+                   float yd = abs(y - yp);
+                   float zd = abs(z - zp);
+                   if (xd < 2.0 * delta_x||yd < 2.0 * delta_x|| zd < 2.0 * delta_x){
+                      float disTosurface = sqrt(xd * xd + yd * yd + zd * zd);
+                      if (disTosurface < disTosurfaceMin){
+                         disTosurfaceMin = disTosurface;
+                         idx_min = p_idx_lin;
+                         find_close_point = 1;
+                         //printf("x:%f,%f,%f,xp,%f,%f,%f,xd%f,%f,%f,%f\n",x,y,z,xp,yp,zp,xd,yd,zd,disTosurfaceMin);
+                         
+                      }
+                  }
+                } // for all points in this grid
+              
 
+            }
           }
         }
+        search_region ++;
+      }//while 
+      
+      float tsdf_x = MaxDis;
+      float tsdf_y = MaxDis;
+      float tsdf_z = MaxDis;
+
+
+      float color_b =0;
+      float color_g =0;
+      float color_r =0;
+
+      float xnear = 0;
+      float ynear = 0;
+      float znear = 0;
+      if (find_close_point>0){
+          
+          xnear = XYZimage[3*idx_min+0];
+          ynear = XYZimage[3*idx_min+1];
+          znear = XYZimage[3*idx_min+2];
+          tsdf_x = abs(x - xnear);
+          tsdf_y = abs(y - ynear);
+          tsdf_z = abs(z - znear);
+
+          color_b = float(RGBDimage[idx_min].B)/255.0;
+          color_g = float(RGBDimage[idx_min].G)/255.0;
+          color_r = float(RGBDimage[idx_min].R)/255.0;
+
+          //printf("x:%f,tsdf_x:%f,%f,%f\n",disTosurfaceMin,tsdf_x,tsdf_y,tsdf_z);          
       }
-      search_region ++;
-    }//while 
-    
-    float tsdf_x = MaxDis;
-    float tsdf_y = MaxDis;
-    float tsdf_z = MaxDis;
 
 
-    float color_b =0;
-    float color_g =0;
-    float color_r =0;
+      disTosurfaceMin = min(disTosurfaceMin/surface_thick,float(1.0));
+      float ratio = 1.0 - disTosurfaceMin;
+      float second_ratio =0;
+      if (ratio > 0.5) {
+         second_ratio = 1 - ratio;
+      }
+      else{
+         second_ratio = ratio;
+      }
 
-    float xnear = 0;
-    float ynear = 0;
-    float znear = 0;
-    if (find_close_point>0){
-        
-        xnear = XYZimage[3*idx_min+0];
-        ynear = XYZimage[3*idx_min+1];
-        znear = XYZimage[3*idx_min+2];
-        tsdf_x = abs(x - xnear);
-        tsdf_y = abs(y - ynear);
-        tsdf_z = abs(z - znear);
+      if (disTosurfaceMin > 0.999){
+          tsdf_x = MaxDis;
+          tsdf_y = MaxDis;
+          tsdf_z = MaxDis;
+      }
 
-        color_b = float(RGBDimage[idx_min].B)/255.0;
-        color_g = float(RGBDimage[idx_min].G)/255.0;
-        color_r = float(RGBDimage[idx_min].R)/255.0;
+      
+      if (encode_type == 101){ 
+        tsdf_x = min(tsdf_x, surface_thick);
+        tsdf_y = min(tsdf_y, surface_thick);
+        tsdf_z = min(tsdf_z, surface_thick);
+      }
+      else{
+        tsdf_x = min(tsdf_x, float(2.0 * delta_x));
+        tsdf_y = min(tsdf_y, float(2.0 * delta_y));
+        tsdf_z = min(tsdf_z, float(2.0 * delta_z));
+      }
 
-        //printf("x:%f,tsdf_x:%f,%f,%f\n",disTosurfaceMin,tsdf_x,tsdf_y,tsdf_z);          
+     
+
+      float depth_project   = XYZimage[3*(ix * im_h + iy)+1];  
+      if (zz > depth_project) {
+        tsdf_x = - tsdf_x;
+        tsdf_y = - tsdf_y;
+        tsdf_z = - tsdf_z;
+        disTosurfaceMin = - disTosurfaceMin;
+        second_ratio = - second_ratio;
+      }
+
+      // encode_type 
+      if (encode_type == 100||encode_type == 101){
+        tsdf_data[index + 0 * volume_size] = float(tsdf_x);
+        tsdf_data[index + 1 * volume_size] = float(tsdf_y);
+        tsdf_data[index + 2 * volume_size] = float(tsdf_z);
+      }
+      else if(encode_type == 102){
+        tsdf_data[index + 0 * volume_size] = float(tsdf_x);
+        tsdf_data[index + 1 * volume_size] = float(tsdf_y);
+        tsdf_data[index + 2 * volume_size] = float(tsdf_z);
+        tsdf_data[index + 3 * volume_size] = float(color_b/scale);
+        tsdf_data[index + 4 * volume_size] = float(color_g/scale);
+        tsdf_data[index + 5 * volume_size] = float(color_r/scale);
+      }
+      else if(encode_type == 103){
+        tsdf_data[index + 0 * volume_size] = float(ratio);
+      }
+
+      // scale feature 
+      for (int i = 0; i < fdim; i++){
+          tsdf_data[index + i * volume_size] = float(scale* float(tsdf_data[index + i * volume_size]));
+      }
     }
-
-
-    disTosurfaceMin = min(disTosurfaceMin/surface_thick,float(1.0));
-    float ratio = 1.0 - disTosurfaceMin;
-    float second_ratio =0;
-    if (ratio > 0.5) {
-       second_ratio = 1 - ratio;
-    }
-    else{
-       second_ratio = ratio;
-    }
-
-    if (disTosurfaceMin > 0.999){
-        tsdf_x = MaxDis;
-        tsdf_y = MaxDis;
-        tsdf_z = MaxDis;
-    }
-
-    
-    if (encode_type == 101){ 
-      tsdf_x = min(tsdf_x, surface_thick);
-      tsdf_y = min(tsdf_y, surface_thick);
-      tsdf_z = min(tsdf_z, surface_thick);
-    }
-    else{
-      tsdf_x = min(tsdf_x, float(2.0 * delta_x));
-      tsdf_y = min(tsdf_y, float(2.0 * delta_y));
-      tsdf_z = min(tsdf_z, float(2.0 * delta_z));
-    }
-
-   
-
-    float depth_project   = XYZimage[3*(ix * im_h + iy)+1];  
-    if (zz > depth_project) {
-      tsdf_x = - tsdf_x;
-      tsdf_y = - tsdf_y;
-      tsdf_z = - tsdf_z;
-      disTosurfaceMin = - disTosurfaceMin;
-      second_ratio = - second_ratio;
-    }
-
-    // encode_type 
-    if (encode_type == 100||encode_type == 101){
-      tsdf_data[index + 0 * volume_size] = float(tsdf_x);
-      tsdf_data[index + 1 * volume_size] = float(tsdf_y);
-      tsdf_data[index + 2 * volume_size] = float(tsdf_z);
-    }
-    else if(encode_type == 102){
-      tsdf_data[index + 0 * volume_size] = float(tsdf_x);
-      tsdf_data[index + 1 * volume_size] = float(tsdf_y);
-      tsdf_data[index + 2 * volume_size] = float(tsdf_z);
-      tsdf_data[index + 3 * volume_size] = float(color_b/scale);
-      tsdf_data[index + 4 * volume_size] = float(color_g/scale);
-      tsdf_data[index + 5 * volume_size] = float(color_r/scale);
-    }
-    else if(encode_type == 103){
-      tsdf_data[index + 0 * volume_size] = float(ratio);
-    }
-
-    // scale feature 
-    for (int i = 0; i < fdim; i++){
-        tsdf_data[index + i * volume_size] = float(scale* float(tsdf_data[index + i * volume_size]));
-    }
-
     //}// end for each index in each box
-};
+}
 
-__global__ void compute_TSDFGPUbox_proj(float* tsdf_data, float* R_data, float* K_data, RGBDpixel* RGBDimage, float* XYZimage,
+template <typename Dtype>
+__global__ void compute_TSDFGPUbox_proj(Dtype* tsdf_data, float* R_data, float* K_data, RGBDpixel* RGBDimage, float* XYZimage,
                                       const float* bb3d_data, int tsdf_size,int tsdf_size1,int tsdf_size2, int fdim, int im_w, int im_h, const int encode_type,const float scale)
 {
   const int index = threadIdx.x + blockIdx.x * blockDim.x;;
@@ -367,9 +370,9 @@ __global__ void fillInBeIndexFull(unsigned int* beIndexFull, unsigned int* beInd
      }
 }
 
-
-void compute_TSDF_Space(Scene3D* scene , Box3D SpaceBox, float* tsdf_data_GPU, 
-    std::vector<int> grid_size, int encode_type, float scale){
+template <typename Dtype>
+void compute_TSDF_Space(Scene3D<Dtype>* scene , Box3D SpaceBox, Dtype* tsdf_data_GPU, 
+    std::vector<int> grid_size, int encode_type, float scale) { 
    scene->loadData2XYZimage(); 
 
    float* bb3d_data;
@@ -387,8 +390,7 @@ void compute_TSDF_Space(Scene3D* scene , Box3D SpaceBox, float* tsdf_data_GPU,
    int THREADS_NUM = 1024;
    int BLOCK_NUM = int((grid_size[1]*grid_size[2]*grid_size[3] + size_t(THREADS_NUM) - 1) / THREADS_NUM);
 
-   compute_TSDFGPUbox<<<BLOCK_NUM,THREADS_NUM>>>(tsdf_data_GPU, R_data, K_data, range, scene->grid_delta, grid_range, RGBDimage, 
-                           star_end_indx_data, pc_lin_indx_data, XYZimage, bb3d_data, grid_size[1],grid_size[2],grid_size[3],grid_size[0], 
+   compute_TSDFGPUbox<<<BLOCK_NUM,THREADS_NUM>>>(BLOCK_NUM, tsdf_data_GPU, R_data, K_data, range, scene->grid_delta, grid_range, RGBDimage, star_end_indx_data, pc_lin_indx_data, XYZimage, bb3d_data, grid_size[1],grid_size[2],grid_size[3],grid_size[0], 
                            scene->width, scene->height, encode_type, scale);
 
    scene-> free();
@@ -396,8 +398,9 @@ void compute_TSDF_Space(Scene3D* scene , Box3D SpaceBox, float* tsdf_data_GPU,
    CUDA_CHECK(cudaFree(bb3d_data));
 }
 
-void compute_TSDF (std::vector<Scene3D*> *chosen_scenes_ptr, std::vector<int> *chosen_box_id, 
-                  float* datamem, std::vector<int> grid_size, int encode_type, float scale) {
+template <typename Dtype>
+void compute_TSDF(std::vector<Scene3D<Dtype>*> *chosen_scenes_ptr, std::vector<int> *chosen_box_id, 
+                  Dtype* datamem, std::vector<int> grid_size, int encode_type, float scale) {
   // for each scene 
   int totalcounter = 0;
   float tsdf_size = grid_size[1];
@@ -407,20 +410,19 @@ void compute_TSDF (std::vector<Scene3D*> *chosen_scenes_ptr, std::vector<int> *c
   }
 
   int numeltsdf = grid_size[0]*tsdf_size*tsdf_size*tsdf_size;
-  int THREADS_NUM = 1024;
-  int BLOCK_NUM = int((tsdf_size*tsdf_size*tsdf_size + size_t(THREADS_NUM) - 1) / THREADS_NUM);
+  int BLOCK_NUM = tsdf_size * tsdf_size * tsdf_size;
   float* bb3d_data;
 
   //int tmpD; cudaGetDevice(&tmpD); std::cout<<"GPU at LINE "<<__LINE__<<" = "<<tmpD<<std::endl;
   //checkCUDA(__LINE__,cudaDeviceSynchronize());
   CUDA_CHECK(cudaMalloc(&bb3d_data,  sizeof(float)*15));
   
-  Scene3D* scene_prev = NULL;
+  Scene3D<Dtype>* scene_prev = NULL;
   for (int sceneId = 0;sceneId<(*chosen_scenes_ptr).size();sceneId++){
       // caculate in CPU mode
       //compute_TSDFCPUbox(tsdf_data,&((*chosen_scenes_ptr)[sceneId]),boxId,grid_size,encode_type,scale);
       // caculate in GPU mode
-      Scene3D* scene = (*chosen_scenes_ptr)[sceneId];
+      Scene3D<Dtype>* scene = (*chosen_scenes_ptr)[sceneId];
       // perpare scene
       if (scene!=scene_prev){
           if (scene_prev!=NULL){
@@ -443,16 +445,14 @@ void compute_TSDF (std::vector<Scene3D*> *chosen_scenes_ptr, std::vector<int> *c
       float* XYZimage  = scene->XYZimage;
       
       // output
-      float * tsdf_data = &datamem[totalcounter*numeltsdf];
+      Dtype * tsdf_data = &datamem[totalcounter*numeltsdf];
 
       if (encode_type > 99){
-          compute_TSDFGPUbox<<<BLOCK_NUM,THREADS_NUM>>>(tsdf_data, R_data, K_data, range, scene->grid_delta, grid_range, RGBDimage, 
-                         star_end_indx_data, pc_lin_indx_data, XYZimage, bb3d_data, grid_size[1],grid_size[2],grid_size[3], grid_size[0], 
-                         scene->width, scene->height, encode_type, scale);
+          compute_TSDFGPUbox<<<CAFFE_GET_BLOCKS(BLOCK_NUM),CAFFE_CUDA_NUM_THREADS>>>(BLOCK_NUM, tsdf_data, R_data, K_data, range, scene->grid_delta,   grid_range, RGBDimage, star_end_indx_data, pc_lin_indx_data, XYZimage, bb3d_data, grid_size[1],grid_size[2],grid_size[3], grid_size[0], scene->width, scene->height, encode_type, scale);
 
       }
       else{
-        compute_TSDFGPUbox_proj<<<BLOCK_NUM,THREADS_NUM>>>(tsdf_data, R_data, K_data, RGBDimage, XYZimage,
+        compute_TSDFGPUbox_proj<<<CAFFE_GET_BLOCKS(BLOCK_NUM), CAFFE_CUDA_NUM_THREADS>>>(tsdf_data, R_data, K_data, RGBDimage, XYZimage,
                                                            bb3d_data, grid_size[1],grid_size[2],grid_size[3], grid_size[0], 
                                                            scene->width, scene->height, encode_type, scale);
       }
@@ -472,8 +472,8 @@ void compute_TSDF (std::vector<Scene3D*> *chosen_scenes_ptr, std::vector<int> *c
    
 }
 
-
-void Scene3D::compute_xyzGPU() {
+template <typename Dtype>
+void Scene3D<Dtype>::compute_xyzGPU() {
     if (!GPUdata){
         std::cout<< "Data is not at GPU cannot compute_xyz at GPU"<<std::endl;
     }
@@ -484,7 +484,8 @@ void Scene3D::compute_xyzGPU() {
     compute_xyzkernel<<<width, height>>>(XYZimage, RGBDimage, K_GPU, R_GPU);
 }
 
-void Scene3D::cpu2gpu()
+template <typename Dtype>
+void Scene3D<Dtype>::cpu2gpu()
 {
 	if (!GPUdata){
 		if (beIndex!=NULL){
@@ -578,7 +579,8 @@ void Scene3D::cpu2gpu()
 	}
 }
 
-void Scene3D::free(){
+template <typename Dtype>
+void Scene3D<Dtype>::free(){
 	if (GPUdata){
       //std::cout<< "free GPUdata"<<std::endl;
 		if (RGBDimage   !=NULL) {CUDA_CHECK(cudaFree(RGBDimage));    RGBDimage = NULL;}
@@ -604,4 +606,9 @@ void Scene3D::free(){
 	}
 }
 
+// Explicit instantiation
+template void compute_TSDF<float>(std::vector<Scene3D<float>*> *chosen_scenes_ptr, std::vector<int> *chosen_box_id, 
+                  float* datamem, std::vector<int> grid_size, int encode_type, float scale);
+template void compute_TSDF<double>(std::vector<Scene3D<double>*> *chosen_scenes_ptr, std::vector<int> *chosen_box_id, 
+                  double* datamem, std::vector<int> grid_size, int encode_type, float scale);                  
 }

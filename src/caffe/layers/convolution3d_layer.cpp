@@ -39,9 +39,9 @@ void Convolution3DLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   temporal_pad_ = this->layer_param_.convolution_3d_param().temporal_pad();
   num_ = bottom[0]->num();
   channels_ = bottom[0]->channels();
-  length_ = bottom[0]->length();
-  height_ = bottom[0]->height();
-  width_ = bottom[0]->width();
+  length_ = bottom[0]->shape(2);
+  height_ = bottom[0]->shape(3);
+  width_ = bottom[0]->shape(4);
   num_output_ = this->layer_param_.convolution_3d_param().num_output();
   filter_group_ = this->layer_param_.convolution_3d_param().filter_group();
   CHECK_GT(num_output_, 0);
@@ -215,6 +215,6 @@ STUB_GPU(Convolution3DLayer);
 #endif
 
 INSTANTIATE_CLASS(Convolution3DLayer);
-//REGISTER_LAYER_CLASS(Convolution3D);
+REGISTER_LAYER_CLASS(Convolution3D);
 
 }  // namespace caffe

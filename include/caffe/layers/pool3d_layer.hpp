@@ -37,6 +37,9 @@ class Pooling3DLayer : public Layer<Dtype> {
  public:
   explicit Pooling3DLayer(const LayerParameter& param)
       : Layer<Dtype>(param) {}
+  virtual inline const char* type() const { return "Pooling3D"; }
+  virtual inline int ExactNumBottomBlobs() const { return 1; }
+  virtual inline int MinTopBlobs() const { return 1; }
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,

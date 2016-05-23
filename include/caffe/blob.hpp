@@ -144,14 +144,12 @@ class Blob {
   /// @brief Deprecated legacy shape accessor channels: use shape(1) instead.
   inline int channels() const { return LegacyShape(1); }
   /// @brief Deprecated legacy shape accessor length: use shape(2) instead.
-  inline int length() const { return LegacyShape(2); }
-  /// @brief Deprecated legacy shape accessor height: use shape(2) instead.
-  inline int height() const { return LegacyShape(3); }
+  inline int height() const { return LegacyShape(2); }
   /// @brief Deprecated legacy shape accessor width: use shape(3) instead.
-  inline int width() const { return LegacyShape(4); }
+  inline int width() const { return LegacyShape(3); }
   inline int LegacyShape(int index) const {
     CHECK_LE(num_axes(), 5)
-        << "Cannot use legacy accessors on Blobs with > 4 axes.";
+        << "Cannot use legacy accessors on Blobs with > 5 axes.";
     CHECK_LT(index, 5);
     CHECK_GE(index, -5);
     if (index >= num_axes() || index < -num_axes()) {
@@ -163,19 +161,25 @@ class Blob {
     return shape(index);
   }
 
-  inline int offset(const int n, const int c = 0, const int l = 0, const int h = 0,
+  inline int offset(const int n, const int c, const int l, const int h, const int w) const
+  {
+    return (((n * shape(1) + c) * shape(2) + l) * shape(3) + h) * shape(4) + w;
+  }
+
+  inline int offset(const int n, const int c = 0, const int h = 0,
       const int w = 0) const {
     CHECK_GE(n, 0);
     CHECK_LE(n, num());
     CHECK_GE(channels(), 0);
     CHECK_LE(c, channels());
-    CHECK_GE(length(), 0);
-    CHECK_LE(c, length());
     CHECK_GE(height(), 0);
     CHECK_LE(h, height());
     CHECK_GE(width(), 0);
     CHECK_LE(w, width());
-    return (((n * channels() + c) *length() + l) * height() + h) * width() + w;
+    if (num_axes() < 5)
+      return ((n * channels() + c) * height() + h) * width() + w;
+    else
+      return (((n * shape(1) + c) * shape(2)) * shape(3) + h) * shape(4) + w;
   }
 
   inline int offset(const vector<int>& indices) const {
@@ -210,7 +214,7 @@ class Blob {
 
   inline Dtype data_at(const int n, const int c, const int h,
       const int w) const {
-    return cpu_data()[offset(n, c, 0, h, w)];
+    return cpu_data()[offset(n, c, h, w)];
   }
 
   inline Dtype diff_at(const int n, const int c, const int l, const int h,
@@ -220,7 +224,7 @@ class Blob {
 
   inline Dtype diff_at(const int n, const int c, const int h,
       const int w) const {
-    return cpu_diff()[offset(n, c, 0, h, w)];
+    return cpu_diff()[offset(n, c, h, w)];
   }
 
   inline Dtype data_at(const vector<int>& index) const {

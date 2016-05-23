@@ -87,7 +87,10 @@ void ImageDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       << top[0]->width();
   // label
   vector<int> label_shape(1, batch_size);
-  top[1]->Reshape(label_shape);
+  if (top.size() == 2)
+  {
+    top[1]->Reshape(label_shape);
+  }
   this->prefetch_label_.Reshape(label_shape);
 }
 
@@ -137,6 +140,7 @@ void ImageDataLayer<Dtype>::InternalThreadEntry() {
     // get a blob
     timer.Start();
     CHECK_GT(lines_size, lines_id_);
+	//LOG(INFO) << lines_[lines_id_].first;
     cv::Mat cv_img = ReadImageToCVMat(root_folder + lines_[lines_id_].first,
         new_height, new_width, is_color, min_height, min_width);
     CHECK(cv_img.data) << "Could not load " << lines_[lines_id_].first;

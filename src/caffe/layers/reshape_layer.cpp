@@ -8,7 +8,29 @@ namespace caffe {
 template <typename Dtype>
 void ReshapeLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  top[0]->Reshape(this->layer_param_.reshape_param().shape());
+  BlobShape blobShape = this->layer_param_.reshape_param().shape();
+  vector<int> shape;
+  int count = bottom[0]->count();
+  for (int i = 0; i < blobShape.dim_size(); i++)
+  {
+  	if (blobShape.dim(i) == 0)
+  	{
+  		shape.push_back(bottom[0]->shape(i));
+  		count /= bottom[0]->shape(i);
+  	}
+  	else if (blobShape.dim(i) == -1)
+  	{
+  		shape.push_back(count);
+  		break;
+  	}
+  	else
+  	{
+  		shape.push_back(blobShape.dim(i));
+  		count /= blobShape.dim(i);
+  	}
+  }
+
+  top[0]->Reshape(shape);
   CHECK_EQ(top[0]->count(), bottom[0]->count())
      << "new shape must have the same count as input";
   top[0]->ShareData(*bottom[0]);

@@ -23,16 +23,16 @@ public:
 
   virtual inline const char* type() const { return "Scene3DData"; }
   virtual inline int ExactNumBottomBlobs() const { return 0; }
-  virtual inline int ExactNumTopBlobs() const { return 4; }
+  virtual inline int MinNumTopBlobs() const { return 4; }
 
 protected:
   shared_ptr<Caffe::RNG> prefetch_rng_;
   virtual void shuffleCategory(int cate);
-  virtual void shuffleData(Scene3D* scene, bool neg, bool pos);
+  virtual void shuffleData(Scene3D<Dtype>* scene, bool neg, bool pos);
   virtual void InternalThreadEntry();
   void compute_attention_area(int scene_id, int obj_id, Dtype* attention_bb_data);
 
-  vector<Scene3D*> scenes;
+  vector<Scene3D<Dtype>*> scenes;
   vector<int> grid_size;
   vector<int> bb_param_weight;
   vector<int> batch_size;
