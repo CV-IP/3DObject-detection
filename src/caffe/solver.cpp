@@ -211,10 +211,6 @@ void Solver<Dtype>::Step(int iters) {
       losses[idx] = loss;
     }
     if (display) {
-	  if (iter_ == 465)
-	  {
-		  LOG(INFO) << "Hello world";
-	  }
       LOG(INFO) << "Iteration " << iter_ << ", loss = " << smoothed_loss;
       const vector<Blob<Dtype>*>& result = net_->output_blobs();
       int score_index = 0;
